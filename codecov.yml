@@ -1,0 +1,7 @@
+coverage:
+    notify:
+        slack:
+            project:
+                url: "https://hooks.slack.com/services/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"
+                target: 0%
+                only_pulls: true

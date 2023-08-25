@@ -1,0 +1,10 @@
+{
+    "Parameters":{
+        "ApplicationName":"chron",
+        "Email":"ammsamai@gmail.com",
+        "EmailPassword":"fohqdukjfgrxqrxg",
+        "CHRONUS_BASE_URL":"http://Sydneyuni.chronus.com/api/v2",
+        "CHRONUS_API_KEY":"230156fd7d65575b1c39c94464f2b86dbf7ac701"
+
+    }
+}

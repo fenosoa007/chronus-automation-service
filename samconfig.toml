@@ -1,0 +1,12 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "ChronusStack"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1tlgadg2mgnuo"
+s3_prefix = "ChronusStack"
+region = "ap-southeast-2"
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "Application=\"chron\" Program=\"Shared\" Environment=\"C\" CloudFrontPriceClass=\"PriceClass_200\" ChronousBaseURL=\"http://Sydneyuni.chronus.com/api/v2\" ChronousAPIKey=\"230156fd7d65575b1c39c94464f2b86dbf7ac701\" Email=\"ammsamai@gmail.com\" EmailPassword=\"fohqdukjfgrxqrxg\""
+image_repositories = []
+confirm_changeset = true

@@ -1,0 +1,187 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: AWS Serverless Banner.
+Globals:
+  Function:
+    Tags:
+      Application: !Ref Application
+      Program: !Ref Program
+      Environment: !Ref Environment
+    CodeUri: .
+    Runtime: nodejs12.x
+    MemorySize: 128
+    Timeout: 120
+  Api:
+    EndpointConfiguration: REGIONAL
+    Cors:
+      AllowMethods: "'OPTIONS,POST,GET'"
+      AllowHeaders: "'*'"
+      AllowOrigin: "'*'"
+    BinaryMediaTypes:
+      - application~1octet-stream
+Parameters:
+  Application:
+    Default: chron
+    Description: Application Name
+    Type: String
+    MinLength: 4
+    MaxLength: 5
+  Program:
+    Default: Shared
+    Type: String
+  Environment:
+    Default: C
+    Description: Environment (Coders, Development, Test, Production)
+    Type: String
+    AllowedValues: [C, D, T, P]
+    ConstraintDescription: Must specify C, D, T or P.
+  CloudFrontPriceClass:
+    Type: String
+    Description: "The price class for CloudFront distribution"
+    Default: "PriceClass_200"
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+  ChronousBaseURL:
+    Default: ""
+    Description: Chronous API URL
+    Type: String
+  ChronousAPIKey:
+    Default: ""
+    Description: Chronous API KEY
+    Type: String
+  Email:
+    Default: "test@gmail.com"
+    Description: STMP EMAIL USER
+    Type: String
+  EmailPassword:
+    Default: "password1234"
+    Description: password
+    Type: String
+Mappings:
+  EnvironmentMap:
+    C:
+      Name: Coders
+      Domain: coder-s3-chronus-usyd
+      Bucket: coder-s3-chronus-bucket
+    D:
+      Name: Develop
+      Domain: develop-banner-usyd
+      Bucket: develop-s3-banner-bucket
+    T:
+      Name: Test
+      Domain: test-banner-usyd
+      Bucket: test-s3-banner-bucket
+    P:
+      Name: Production
+      Domain: banner-usyd
+      Bucket: s3-banner-bucket
+Conditions:
+  IsProd: !Equals [!Ref Environment, P]
+  IsCoders: !Equals [!Ref Environment, C]
+  IsNotCoders: !Not [!Equals [!Ref Environment, C]]
+Resources:
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: BannerAdmins
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: True
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+      Schema:
+        - AttributeDataType: String
+          Name: email
+          Required: false
+      UsernameAttributes:
+        - email
+      EmailVerificationSubject: !Sub
+        - Welcome to ${Name} Banner Service Admin
+        - Name: !FindInMap [EnvironmentMap, !Ref Environment, Name]
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: BannerClient
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+      SupportedIdentityProviders:
+        - COGNITO
+      AllowedOAuthFlows:
+        - implicit
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - aws.cognito.signin.user.admin
+        - openid
+      CallbackURLs:
+        - http://localhost
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      # We add here instead of Globals due to unsupported properties.
+      # https://github:com/awslabs/serverless-application-model/blob/master/docs/globals:rst#unsupported-properties
+      StageName: !Ref Environment
+      Cors: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+        AddDefaultAuthorizerToCorsPreflight: False
+  ChronusAutomationServiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/chronusAutomationService.chronusAutomationService
+      Environment:
+        Variables:
+          EMAIL_USER: !Ref Email
+          EMAIL_PASSWORD: !Ref EmailPassword
+          CHRONUS_BASE_URL: !Ref ChronousBaseURL
+          CHRONUS_API_KEY: !Ref ChronousAPIKey
+      Policies:
+        - AWSLambdaExecute # Managed Policy
+        - Version: 2012-10-17
+          Statement:
+            - Sid: ReadSSMParameters
+              Effect: Allow
+              Action:
+                - ssm:GetParameter
+                - ssm:GetParametersByPath
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${Application}/${Environment}/*
+      Events:
+        HttpGet:
+          Type: Api
+          Properties:
+            Path: /
+            Method: GET
+            RestApiId: !Ref ApiGateway
+            Auth:
+              Authorizer: NONE
+
+#Outputs
+Outputs:
+  Region:
+    Description: "AWS Region"
+    Value: !Sub "${AWS::Region}"
+  CognitoUserPoolId:
+    Description: "CognitoUserPool Id"
+    Value: !Ref CognitoUserPool
+  CognitoUserPoolClientId:
+    Description: "CognitoUserPoolClient Id"
+    Value: !Ref CognitoUserPoolClient
+  # CognitoUserPoolDomain:
+  #   Description: "Cognito User Pool Domain"
+  #   Value: !Sub "${CognitoUserPoolDomain}.auth.ap-southeast-2.amazoncognito.com"
+  # OAuthScopes:
+  #   Description: "Cognito User Pool Client AllowedOAuthScopes"
+  #   Value: !GetAtt CognitoUserPoolClient.AllowedOAuthScopes
+  ChronousAutomationServiceFunctionApiEndPoint:
+    Description: "Get Banners API Endpoint"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ChronousAutomationServiceFunctionApiEndPoint"
